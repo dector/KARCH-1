@@ -27,6 +27,8 @@ dw 3: 0001000000001100% \ read 12h
 dw 4: 0001100000001101% \ write 13h
 dw 5: 0010000000000010% \ get r2
 dw 6: 0010100000000100% \ put r4
+dw 7: 1000000011100011% \ mov r7, r3 !!!
+dw 8: 0010000000000111% \ get r7 !!!
 
 dw 12: 22h
 dw 13: 0
@@ -94,6 +96,7 @@ org 60h
 
 \ ------- MOV reg1, reg2 -------
 op_mov
+    {cjs nz, s_chk_regb;}
     {or rb, ra, z;}
 {cjp nz, caddr;}
 
@@ -141,6 +144,7 @@ op_write
 
 \ ------- GET reg -------
 op_get
+    {cjs nz, s_chk_reg;}
     {cjs nz, s_cut_reg;}
     {or sll, r8, z;}
     {or sll, r8, z;}
@@ -325,6 +329,23 @@ s_cut_reg
     {and r8, r9;}
 {crtn nz;}
 
+s_chk_regb
+    {or r9, 00e0h, z;}
+    {cjs nz, s_cmp_neq;}
+{crtn not zo;}
+{cjp nz, caddr;}
+
+s_chk_reg
+    {or r9, 0007h, z;}
+    {cjs nz, s_cmp_neq;}
+{crtn not zo;}
+{cjp nz, caddr;}
+
+s_cmp_neq
+    {or r11, r9, z;}
+    {and r11, r8;}
+    {xor nil, r11, r9;}
+{crtn nz;}
 
 
 \ ------------------------ \
