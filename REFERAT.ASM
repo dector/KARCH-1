@@ -16,22 +16,22 @@ accept dev_buf[0]: 0ch, 6h, 0fh, 0ch, 0
 {cjp nz, start;}
 
 \ -------------- TEST
-accept r2: 3
-accept r3: 2
+accept r2: 2
+accept r3: 3
 accept r4: 4
 
-dw 0: 1000000001000011% \ mov r2, r3
-dw 1: 0000000000010010% \ in 12h
-dw 2: 0000100010010010% \ out 92h
-dw 3: 0001000000001100% \ read 12h
-dw 4: 0001100000001101% \ write 13h
-dw 5: 0010000000000010% \ get r2
-dw 6: 0010100000000100% \ put r4
-dw 7: 1000000011100011% \ mov r7, r3 !!!
-dw 8: 0010000000000111% \ get r7 !!!
+dw 0: 0101000000000011% \ jmp 3h
+dw 1: 1111110000000000% \ exit
+dw 3: 1001100001100010% \ cmp r3, r2
+dw 4: 0100100000001111% \ js 0fh
+dw 5: 1001100001000011% \ cmp r2, r3
+dw 6: 0100100000001000% \ js 8h
+dw 8: 0101100000001111% \ jz 0fh
+dw 9: 1001100001100011% \ cmp r3, r3
+dw 10: 0101100000001101% \ jz 0dh
+dw 13: 1111110000000000% \ exit
 
-dw 12: 22h
-dw 13: 0
+dw 15: 1111110000000000% \ exit
 \ -------------- TEST ENDS
 
 
@@ -51,42 +51,42 @@ org 48h
     {cjp nz, op_get;}
 org 4ah
     {cjp nz, op_put;}
-\org 4ch
-\    {cjp nz, op_writed;}
-\org 4eh
-\    {cjp nz, op_readd;}
-\org 50h
-\    {cjp nz, op_geth;}
-\org 52h
-\    {cjp nz, op_js;}
-\org 54h
-\    {cjp nz, op_jmp;}
-\org 56h
-\    {cjp nz, op_jz;}
+org 4ch
+    {cjp nz, op_writed;}
+org 4eh
+    {cjp nz, op_readd;}
+org 50h
+    {cjp nz, op_geth;}
+org 52h
+    {cjp nz, op_js;}
+org 54h
+    {cjp nz, op_jmp;}
+org 56h
+    {cjp nz, op_jz;}
 
 org 60h
     {cjp nz, op_mov;}
-\org 61h
-\    {cjp nz, op_add;}
-\org 62h
-\    {cjp nz, op_sub;}
-\org 63h
-\    {cjp nz, op_or;}
-\org 64h
-\    {cjp nz, op_and;}
-\org 65h
-\    {cjp nz, op_xor;}
-\org 66h
-\    {cjp nz, op_cmp;}
-\org 67h
-\    {cjp nz, op_swap;}
-\org 68h
-\    {cjp nz, op_mul;}
+org 61h
+    {cjp nz, op_add;}
+org 62h
+    {cjp nz, op_sub;}
+org 63h
+    {cjp nz, op_or;}
+org 64h
+    {cjp nz, op_and;}
+org 65h
+    {cjp nz, op_xor;}
+org 66h
+    {cjp nz, op_cmp;}
+org 67h
+    {cjp nz, op_swap;}
+org 68h
+    {cjp nz, op_mul;}
 \org 69h
 \    {cjp nz, op_div;}
 
-\org 7fh
-\    {cjp nz, op_exit;}
+org 7fh
+    {cjp nz, op_exit;}
 
 
 
@@ -129,7 +129,6 @@ op_out
 \ ------- READ address -------
 op_read
     {cjs nz, s_cut_addr;}
-    {or r9, 0080h, z;}
     {or nil, r8, z; oey; ewl;}
     {r; cjp rdm, cp; or r15, bus_d, z;}
 {cjp nz, caddr;}
@@ -137,7 +136,6 @@ op_read
 \ ------- WRITE address -------
 op_write
     {cjs nz, s_cut_addr;}
-    {or r9, 0080h, z;}
     {or nil, r8, z; oey; ewl;}
     {w; cjp rdm, cp; or nil, r15, z; oey;}
 {cjp nz, caddr;}
@@ -151,7 +149,7 @@ op_get
     {or sll, r8, z;}
     {or sll, r8, z;}
     {or sll, r8, z;}
-    {or r9, 0fh;}
+    {or r9, 0fh, z;}
     {add r8, r9; oey; load ra; load rb;}
     {or rb, ra, z;}
 {cjp nz, caddr;}
@@ -164,103 +162,202 @@ op_put
     {or rb, ra, z;}
 {cjp nz, caddr;}
 
-
-op_acc_too
-{cjp nz, caddr;}
-
-op_to_acc
-{or r15, r0, z; FIELD bc1, 010%, 011%, 001%, 0, 0fh, 1;}
-{cjp nz, caddr;}
-
-op_load
-{or r9, 001fh, z;}
-{and nil, r9, r8; oey;}
-{r; cjp rdm, cp; or rb, bus_d, z;}
-{cjp nz, caddr;}
-
-\ --- ADD operation ---------------
+\ ------- ADD reg1, reg2 -------
 op_add
-{add rb, ra;}
+    {cjs nz, s_chk_regb;}
+    {add rb, rb, ra, z;}
 {cjp nz, caddr;}
 
-\ --- MUL operation ---------------
-op_mul
-\ X = R10
-\ 0.Y = R11:R12
-\ Z = R14:R15
-
-{xor r9, r9;}
-{xor r10, r10;}
-{or r10, r15;}
-\ R11 already loaded
-{xor r12, r12;}
-{xor r13, r13;}
-{or r13, 8000h;}
-{xor r14, r14;}
-{xor r15, r15;}
-
-     {and nil, r10, r13; cjp zo, tst1;}
-     {sub r10, z, r10, nz;}
-     {xor r9, 8000h;}
-tst1 {and nil, r11, r13; cjp zo, oper;}
-     {sub r11, z, r7, nz;}
-     {xor r9, 8000h;}
-
-oper {add srl, r11, z;}                     \ Transform R11:R12=Y to R11:R12=0.Y
-     {add sr.9, r12, z;}
-
-iter {and nil, r10, r13; cjp zo, var1;}     \ Check first bit
-                                            \ If it is not 1
-     {add r15, r12; load rm, flags;}        \   Count sum
-     {add r14, r11, rm_c;}
-
-var1 {add sll, r10, z;}                     \ Shift other registers
-     {add srl, r11, z;}                     \ } Use R11:R12 as one
-     {add sr.9, r12, z;}                    \ }            register
-
-{or r10, r10; cjp not zo, iter;}            \ Check multiplyer emptynes
-                                            \ If it's not 0 - count next iteration
-{and nil, r9, r13; cjp zo, caddr;}
-{or r14, 8000h;}
-
+\ ------- SUB reg1, reg2 -------
+op_sub
+    {cjs nz, s_chk_regb;}
+    {sub rb, rb, ra, nz;}
 {cjp nz, caddr;}
 
-\ --- CJP command -----------------
-op_cjp
-{xor r9, r9;}
-{or r9, 0080h;}
-{and r9, r15; cjp not zo, caddr;}
-{xor r9, r9;}
-{or r9, 007fh;}
-{and r8, r9;}
-{xor r7, r7;}
-{or r7, r8;}
-{cjp nz, start;}
+\ ------- OR reg1, reg2 -------
+op_or
+    {cjs nz, s_chk_regb;}
+    {or rb, ra;}
+{cjp nz, caddr;}
 
-\ --- JMP command -----------------
+\ ------- AND reg1, reg2 -------
+op_and
+    {cjs nz, s_chk_regb;}
+    {and rb, ra;}
+{cjp nz, caddr;}
+
+\ ------- XOR reg1, reg2 -------
+op_xor
+    {cjs nz, s_chk_regb;}
+    {xor rb, ra;}
+{cjp nz, caddr;}
+
+\ ------- CMP reg1, reg2 -------
+op_cmp
+    {sub nil, rb, ra, nz; cjp zo, op_cmp_sz;}
+    {cjp nz, op_cmp_cz;}
+op_cmp_s2
+    {sub nil, rb, ra, nz; cjp no, op_cmp_ss;}
+    {cjp nz, op_cmp_cs;}
+op_cmp_sz
+    {or r9, 0001h, z;}
+    {or r10, r9;}
+    {cjp nz, op_cmp_s2;}
+op_cmp_cz
+    {or r9, 0fffeh, z;}
+    {and r10, r9;}
+    {cjp nz, op_cmp_s2;}
+op_cmp_ss
+    {or r9, 0002h, z;}
+    {or r10, r9;}
+    {cjp nz, op_cmp_end;}
+op_cmp_cs
+    {or r9, 0fffdh, z;}
+    {and r10, r9;}
+    {cjp nz, op_cmp_end;}
+op_cmp_end
+{cjp nz, caddr;}
+
+\ ------- SWAP reg1, reg2 -------
+op_swap
+    {cjs nz, s_chk_regb;}
+    {cjs nz, s_chk_reg;}
+    
+    {or r11, 0180h, z;}
+    {or nil, r11, z; oey; load rb;}
+    {or r11, r8, z;}
+    {or srl, r11, z;}
+    {or srl, r11, z;}
+    {or srl, r11, z;}
+    {or srl, r11, z;}
+    {or srl, r11, z;}
+    {or nil, r11, z; oey; load ra;}
+    {or rb, ra, z;}
+    
+    {or nil, r8, z; oey; load ra; load rb;}
+    {or rb, ra, z;}
+    
+    {or r11, 000ch, z;}
+    {or nil, r11, z; oey; load ra;}
+    {or r11, r8, z;}
+    {or sll, r11, z;}
+    {or sll, r11, z;}
+    {or sll, r11, z;}
+    {or sll, r11, z;}
+    {or sll, r11, z;}
+    {or nil, r11, z; oey; load rb;}
+    {or rb, ra, z;}    
+{cjp nz, caddr;}
+
+\ ------- READD address -------
+op_readd
+    {cjs nz, s_cut_addr;}
+    {or nil, r8, z; oey; ewl;}
+    {r; cjp rdm, cp; or r14, bus_d, z;}
+    {add r8, r8, z, nz;}
+    {or nil, r8, z; oey; ewl;}
+    {r; cjp rdm, cp; or r15, bus_d, z;}
+{cjp nz, caddr;}
+
+\ ------- WRITED address -------
+op_writed
+    {cjs nz, s_cut_addr;}
+    {or nil, r8, z; oey; ewl;}
+    {w; cjp rdm, cp; or nil, r14, z; oey;}
+    {add r8, r8, z, nz;}
+    {or nil, r8, z; oey; ewl;}
+    {w; cjp rdm, cp; or nil, r15, z; oey;}
+{cjp nz, caddr;}
+
+\ ------- GETH reg -------
+op_geth
+    {cjs nz, s_chk_reg;}
+    {cjs nz, s_cut_reg;}
+    {or sll, r8, z;}
+    {or sll, r8, z;}
+    {or sll, r8, z;}
+    {or sll, r8, z;}
+    {or sll, r8, z;}
+    {or r9, 0eh, z;}
+    {add r8, r9; oey; load ra; load rb;}
+    {or rb, ra, z;}
+{cjp nz, caddr;}
+
+\ ------- JS address -------
+op_js
+    {cjs nz, s_cut_addr;}
+    {or r9, 0002h, z;}
+    {and nil, r10, r9; cjp zo, op_js_cont;}
+        {or r7, r8, z;}
+        {cjp nz, start;}
+op_js_cont
+{cjp nz, caddr;}
+
+\ ------- JZ address -------
+op_jz
+    {cjs nz, s_cut_addr;}
+    {or r9, 0001h, z;}
+    {and nil, r10, r9; cjp zo, op_jz_cont;}
+        {or r7, r8, z;}
+        {cjp nz, start;}
+op_jz_cont
+{cjp nz, caddr;}
+
+\ ------- JMP address -------
 op_jmp
-{xor r7, r7;}
-{or r7, 0001h;}
+    {cjs nz, s_cut_addr;}
+    {or r7, r8, z;}
 {cjp nz, start;}
 
-\ --- ADD1 ------------------------
-op_add1
-{or r9, 03ffh, z;}
-{and nil, r9, r8; oey; ewl;}
-{r; cjp rdm, cp; or r11, bus_d, z;}
-{add r15, r11;}
-{cjp nz, caddr;}
-
-\ --- SAVE ------------------------
-op_save
-{or r9, 03ffh, z;}
-{and nil, r9, r8; oey; ewl;}
-{w; cjp rdm, cp; or r15, r15; oey;}
-{cjp nz, caddr;}
-
-\ --- EXIT command ----------------
+\ ------- EXIT -------
 op_exit
 {cjp nz, exit;}
+
+\ ------- MUL reg1, reg2 -------
+op_mul
+    {or r9, 0160h, z;}
+    {or nil, r9, r9; oey; load rb;}
+    {or rb, ra, z;}
+
+    {or r9, 0180h, z;}
+    {or nil, r9, r9; oey; load rb;}
+    {or r9, r8, z;}
+    {or srl, r9, z;}
+    {or srl, r9, z;}
+    {or srl, r9, z;}
+    {or srl, r9, z;}
+    {or srl, r9, z;}
+    {or nil, r9, z; oey; load ra;}
+    {or rb, ra, z;}
+
+    {xor r13, r13;}
+    {xor r14, r14;}
+    {xor r15, r15;}
+
+    {or r9, 8000h, z;}
+
+    \ X = r11
+    \ 0.Y = r12:r13
+    \ Z = R14:R15
+
+op_mul_op
+    {add srl, r12, z;}                     \ Transform r12:r13=Y to r12:r13=0.Y
+    {add sr.9, r13, z;}
+
+op_mul_it
+    {and nil, r11, r9; cjp zo, op_mul_vr;} \ Check first bit
+                                           \ If it is not 1
+    {add r15, r13; load rm, flags;}        \   Count sum
+    {add r14, r12, rm_c;}
+
+op_mul_vr
+    {add sll, r11, z;}                     \ Shift other registers
+    {add srl, r12, z;}                     \ } Use r12:r13 as one
+    {add sr.9, r13, z;}                    \ }            register
+
+    {or r11, r11; cjp not zo, op_mul_it;}  \ Check multiplyer emptynes
+                                           \ If it's not 0 - count next op_mul_itation
+{cjp nz, caddr;}
 
 
 
@@ -331,21 +428,17 @@ s_cut_reg
 
 s_chk_regb
     {or r9, 00e0h, z;}
-    {cjs nz, s_cmp_neq;}
-{crtn not zo;}
-{cjp nz, caddr;}
+{cjp nz, s_cmp_neq;}
 
 s_chk_reg
     {or r9, 0007h, z;}
-    {cjs nz, s_cmp_neq;}
-{crtn not zo;}
-{cjp nz, caddr;}
+{cjp nz, s_cmp_neq;}
 
 s_cmp_neq
     {or r11, r9, z;}
     {and r11, r8;}
-    {xor nil, r11, r9;}
-{crtn nz;}
+    {xor nil, r11, r9; crtn not zo;}
+{cjp nz, caddr;}
 
 
 \ ------------------------ \
